@@ -1,6 +1,7 @@
 import { MangaProvider } from '@/providers/interfaces';
 import { Manga, Chapter, Page } from '@/models';
 import { providerRegistry } from '@/providers/registry';
+import { isSpanish } from '@/utils/language';
 
 /**
  * Estado de un intento de proveedor.
@@ -20,8 +21,8 @@ interface ProviderAttempt {
 export class ProviderService {
   /**
    * Obtiene el catálogo consolidado de todos los proveedores activos.
+   * Para cada manga, intenta cargar sus capítulos para contar los disponibles en español.
    * Si todos fallan, lanza un error con mensaje claro para la UI.
-   * Si algunos fallan, devuelve los resultados de los que funcionaron.
    */
   async getCatalog(page = 1, limit = 20): Promise<Manga[]> {
     const providers = providerRegistry.getActiveProviders();
@@ -71,9 +72,20 @@ export class ProviderService {
 
     const deduped = this.deduplicate(results);
 
-    // Si hay proveedores activos pero ninguno devolvió resultados y todos fallaron
-    // (excluyendo proveedores que simplemente no implementan el método),
-    // lanzar error para que la UI muestre un mensaje claro
+    // Para cada manga, intentar cargar capítulos para contar los en español
+    const mangasWithChapterCounts: Manga[] = [];
+    for (const manga of deduped) {
+      try {
+        const chapters = await this.getChapters(manga.sourceId, 'es');
+        mangasWithChapterCounts.push({
+          ...manga,
+          chapters,
+        });
+      } catch {
+        mangasWithChapterCounts.push(manga);
+      }
+    }
+
     const realFailures = attempts.filter(
       (a) => !a.success && a.error !== 'El proveedor no soporta getCatalog'
     );
@@ -81,14 +93,14 @@ export class ProviderService {
       realFailures.length > 0 &&
       realFailures.length === attempts.filter((a) => a.error !== 'El proveedor no soporta getCatalog').length;
 
-    if (providers.length > 0 && deduped.length === 0 && allFailed) {
+    if (providers.length > 0 && mangasWithChapterCounts.length === 0 && allFailed) {
       const failedProviders = realFailures.map((a) => a.providerName).join(', ');
       throw new Error(
         `No se pudo cargar el catálogo. Todos los proveedores fallaron: ${failedProviders}. Inténtelo de nuevo más tarde.`
       );
     }
 
-    return deduped;
+    return mangasWithChapterCounts;
   }
 
   /**
@@ -143,6 +155,20 @@ export class ProviderService {
 
     const deduped = this.deduplicate(results);
 
+    // Para cada resultado de búsqueda, intentar cargar capítulos en español
+    const mangasWithChapterCounts: Manga[] = [];
+    for (const manga of deduped) {
+      try {
+        const chapters = await this.getChapters(manga.sourceId, 'es');
+        mangasWithChapterCounts.push({
+          ...manga,
+          chapters,
+        });
+      } catch {
+        mangasWithChapterCounts.push(manga);
+      }
+    }
+
     const realFailures = attempts.filter(
       (a) => !a.success && a.error !== 'El proveedor no soporta searchManga'
     );
@@ -150,14 +176,14 @@ export class ProviderService {
       realFailures.length > 0 &&
       realFailures.length === attempts.filter((a) => a.error !== 'El proveedor no soporta searchManga').length;
 
-    if (providers.length > 0 && deduped.length === 0 && allFailed) {
+    if (providers.length > 0 && mangasWithChapterCounts.length === 0 && allFailed) {
       const failedProviders = realFailures.map((a) => a.providerName).join(', ');
       throw new Error(
         `No se pudo realizar la búsqueda. Todos los proveedores fallaron: ${failedProviders}. Inténtelo de nuevo más tarde.`
       );
     }
 
-    return deduped;
+    return mangasWithChapterCounts;
   }
 
   /**
@@ -171,7 +197,15 @@ export class ProviderService {
       if (!p.getMangaDetails) continue;
       try {
         const manga = await p.getMangaDetails(sourceId);
-        if (manga) return manga;
+        if (manga) {
+          // Intentar cargar capítulos para el detalle
+          try {
+            const chapters = await this.getChapters(sourceId, 'es');
+            return { ...manga, chapters };
+          } catch {
+            return manga;
+          }
+        }
       } catch (error) {
         console.error(`[ProviderService] Error en getMangaDetails de ${p.id}:`, error);
       }

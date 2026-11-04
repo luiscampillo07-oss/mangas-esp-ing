@@ -7,14 +7,19 @@ import { useContinueReading } from '@/hooks/useContinueReading';
 import MangaReader from '@/components/MangaReader';
 import ReaderControls from '@/components/ReaderControls';
 
+interface ChapterNavigation {
+  previous?: Chapter;
+  next?: Chapter;
+}
+
 export default function Reader() {
   const router = useRouter();
   const { mangaId, chapterId } = router.query as { mangaId: string; chapterId: string };
   const [chapter, setChapter] = useState<Chapter | null>(null);
   const [pages, setPages] = useState<Page[]>([]);
+  const [allChapters, setAllChapters] = useState<Chapter[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
   const { save: saveContinueReading } = useContinueReading();
 
   const loadChapter = useCallback(async () => {
@@ -29,7 +34,7 @@ export default function Reader() {
       setPages(data.pages || []);
 
       // Guardar en historial de continuar leyendo
-      const mangaTitle = chapter?.mangaId || mangaId;
+      const mangaTitle = chapter?.title || mangaId;
       saveContinueReading({
         mangaId,
         title: mangaTitle,
@@ -45,19 +50,41 @@ export default function Reader() {
     }
   }, [chapterId, mangaId, saveContinueReading, chapter]);
 
+  const loadChapters = useCallback(async () => {
+    try {
+      const chapters = await providerService.getChapters(mangaId, 'es');
+      setAllChapters(chapters);
+
+      // Encontrar el capítulo actual en la lista
+      const currentChapter = chapters.find((c) => c.id === chapterId);
+      if (currentChapter) {
+        setChapter(currentChapter);
+      }
+    } catch {
+      console.error('[Reader] Error cargando capítulos');
+    }
+  }, [mangaId, chapterId]);
+
   useEffect(() => {
     loadChapter();
-  }, [loadChapter]);
+    loadChapters();
+  }, [loadChapter, loadChapters]);
+
+  // Encontrar capítulos anterior y siguiente
+  const currentIndex = allChapters.findIndex((c) => c.id === chapterId);
+  const previousChapter = currentIndex > 0 ? allChapters[currentIndex - 1] : undefined;
+  const nextChapter = currentIndex >= 0 && currentIndex < allChapters.length - 1 ? allChapters[currentIndex + 1] : undefined;
 
   const handlePreviousChapter = () => {
-    // La navegación entre capítulos se manejaría obteniendo la lista completa
-    // y buscando el capítulo anterior/siguiente
-    router.back();
+    if (previousChapter) {
+      router.push(`/reader/${mangaId}/${previousChapter.id}`);
+    }
   };
 
   const handleNextChapter = () => {
-    // Similar al anterior
-    router.back();
+    if (nextChapter) {
+      router.push(`/reader/${mangaId}/${nextChapter.id}`);
+    }
   };
 
   const handlePageError = (pageIndex: number) => {
@@ -118,10 +145,11 @@ export default function Reader() {
         onPreviousChapter={handlePreviousChapter}
         onNextChapter={handleNextChapter}
         onBackToManga={() => router.back()}
-        hasPrevious={currentIndex > 0}
-        hasNext={currentIndex < pages.length - 1}
+        hasPrevious={!!previousChapter}
+        hasNext={!!nextChapter}
         currentChapter={chapterNumber}
-        totalChapters={pages.length}
+        currentChapterTitle={chapterTitle}
+        totalChapters={allChapters.length}
       />
     </div>
   );

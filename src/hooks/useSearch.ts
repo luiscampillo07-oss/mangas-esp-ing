@@ -13,6 +13,7 @@ export function useSearch() {
   const search = useCallback(async (query: string) => {
     if (!query.trim()) {
       setResults([]);
+      setError(null);
       return;
     }
 
@@ -22,7 +23,7 @@ export function useSearch() {
       const data = await providerService.searchManga(query);
       setResults(data);
     } catch (err) {
-      setError('No se pudo realizar la búsqueda. Inténtelo de nuevo más tarde.');
+      setError(err instanceof Error ? err.message : 'No se pudo realizar la búsqueda.');
       console.error('[useSearch] Error:', err);
     } finally {
       setLoading(false);

@@ -11,9 +11,24 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Manga[]>([]);
   const { mangas, loading, error, hasMore, loadMore, refresh } = useMangaCatalog(1, 20);
-  const { entries: continueReadingEntries } = useContinueReading();
+  const { entries: continueReadingEntries, navigateToChapter } = useContinueReading();
 
   const mangasToShow = searchQuery.trim() ? searchResults : mangas;
+
+  const handleSearch = async (query: string) => {
+    setSearchQuery(query);
+    if (query.trim()) {
+      // El hook useMangaCatalog ya busca en el catálogo, pero para búsqueda
+      // activa necesitamos usar providerService directamente
+      // Por ahora, usamos los resultados del catálogo filtrados localmente
+      // hasta que se implemente searchManga completo en el proveedor
+      setSearchResults(mangas.filter((m) =>
+        m.title.toLowerCase().includes(query.toLowerCase())
+      ));
+    } else {
+      setSearchResults([]);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-dark-900 text-dark-100">
@@ -55,9 +70,7 @@ export default function Home() {
                 <div
                   key={entry.mangaId}
                   className="flex-shrink-0 w-32 group cursor-pointer"
-                  onClick={() => {
-                    // Navegación al lector se manejaría con el router
-                  }}
+                  onClick={() => navigateToChapter(entry)}
                 >
                   {entry.cover ? (
                     <img
@@ -91,9 +104,7 @@ export default function Home() {
           </h2>
           <SearchBar
             placeholder="Buscar por título..."
-            onSearch={(query) => {
-              setSearchQuery(query);
-            }}
+            onSearch={handleSearch}
           />
         </section>
 

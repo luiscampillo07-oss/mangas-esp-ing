@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/router';
 
 export interface ContinueReadingEntry {
   mangaId: string;
@@ -19,6 +20,7 @@ const MAX_ENTRIES = 10;
  * No guarda imágenes completas, solo metadatos ligeros.
  */
 export function useContinueReading() {
+  const router = useRouter();
   const [entries, setEntries] = useState<ContinueReadingEntry[]>([]);
 
   useEffect(() => {
@@ -73,10 +75,18 @@ export function useContinueReading() {
     }
   }, []);
 
+  const navigateToChapter = useCallback(
+    (entry: ContinueReadingEntry) => {
+      router.push(`/reader/${entry.mangaId}/${entry.chapterId}`);
+    },
+    [router]
+  );
+
   return {
     entries,
     save,
     remove,
     clear,
+    navigateToChapter,
   };
 }
