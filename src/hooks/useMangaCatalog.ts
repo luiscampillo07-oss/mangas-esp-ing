@@ -24,7 +24,7 @@ export function useMangaCatalog(initialPage = 1, initialLimit = 20) {
       }
       setHasMore(data.length === initialLimit);
     } catch (err) {
-      setError('No se pudo cargar el catálogo. Inténtelo de nuevo más tarde.');
+      setError(err instanceof Error ? err.message : 'No se pudo cargar el catálogo. Inténtelo de nuevo más tarde.');
       console.error('[useMangaCatalog] Error:', err);
     } finally {
       setLoading(false);

@@ -28,13 +28,23 @@ export class ProviderService {
       })
     );
 
+    const hasErrors = outcomes.some((o) => o.status === 'rejected');
+
     outcomes.forEach((outcome) => {
       if (outcome.status === 'fulfilled') {
         results.push(...outcome.value);
       }
     });
 
-    return this.deduplicate(results);
+    const deduped = this.deduplicate(results);
+
+    // Si hay proveedores activos pero ninguno devolvió resultados, lanzar error
+    // para que la UI muestre un mensaje claro al usuario
+    if (providers.length > 0 && deduped.length === 0 && hasErrors) {
+      throw new Error('No se pudo cargar el catálogo. Los proveedores de contenido no están disponibles temporalmente.');
+    }
+
+    return deduped;
   }
 
   /**
@@ -58,13 +68,21 @@ export class ProviderService {
       })
     );
 
+    const hasErrors = outcomes.some((o) => o.status === 'rejected');
+
     outcomes.forEach((outcome) => {
       if (outcome.status === 'fulfilled') {
         results.push(...outcome.value);
       }
     });
 
-    return this.deduplicate(results);
+    const deduped = this.deduplicate(results);
+
+    if (providers.length > 0 && deduped.length === 0 && hasErrors) {
+      throw new Error('No se pudo realizar la búsqueda. Los proveedores de contenido no están disponibles temporalmente.');
+    }
+
+    return deduped;
   }
 
   /**

@@ -4,6 +4,15 @@ import { Manga, Chapter, Page } from '@/models';
 const BASE_URL = 'https://api.mangadex.org';
 
 /**
+ * Headers requeridos por MangaDex para evitar bloqueos de bots.
+ * MangaDex exige un User-Agent identificativo para todas las peticiones.
+ */
+const MANGADEX_HEADERS: HeadersInit = {
+  Accept: 'application/json',
+  'User-Agent': 'MangasApp/1.0.0 (https://github.com/luiscampillo07-oss/mangas-esp-ing)',
+};
+
+/**
  * Helper para hacer peticiones a la API de MangaDex con timeout y manejo de errores.
  */
 async function fetchMangaDex<T>(
@@ -18,10 +27,14 @@ async function fetchMangaDex<T>(
       ...options,
       signal: controller.signal,
       headers: {
-        Accept: 'application/json',
+        ...MANGADEX_HEADERS,
         ...options.headers,
       },
     });
+
+    if (response.status === 403) {
+      throw new Error('MANGADEX_FORBIDDEN');
+    }
 
     if (!response.ok) {
       throw new Error(`MangaDex API error: ${response.status} ${response.statusText}`);

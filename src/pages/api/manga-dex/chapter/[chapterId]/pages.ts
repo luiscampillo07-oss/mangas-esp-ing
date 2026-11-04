@@ -22,7 +22,10 @@ export default async function handler(
     const response = await fetch(
       `https://api.mangadex.org/at-home/server/${chapterId}`,
       {
-        headers: { Accept: 'application/json' },
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'MangasApp/1.0.0 (https://github.com/luiscampillo07-oss/mangas-esp-ing)',
+        },
       }
     );
 

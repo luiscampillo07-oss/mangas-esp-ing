@@ -28,6 +28,7 @@ export default async function handler(
       headers: {
         // No enviar headers de autenticación a los servidores de imágenes de MangaDex
         Referer: 'https://mangadex.org/',
+        'User-Agent': 'MangasApp/1.0.0 (https://github.com/luiscampillo07-oss/mangas-esp-ing)',
       },
     });
 
