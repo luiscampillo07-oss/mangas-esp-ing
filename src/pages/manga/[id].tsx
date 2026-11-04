@@ -5,15 +5,15 @@ import { useRouter } from 'next/router';
 import { Manga, Chapter } from '@/models';
 import { providerService } from '@/providers/providerService';
 import ChapterList from '@/components/ChapterList';
-import { isSpanish, getLanguageName } from '@/utils/language';
+import { useLanguageFilter } from '@/hooks/useLanguageFilter';
 
 export default function MangaDetails() {
   const router = useRouter();
   const { id } = router.query as { id: string };
   const [manga, setManga] = useState<Manga | null>(null);
-  const [chapters, setChapters] = useState<Chapter[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { language, setLanguageFilter, isSpanish, isEnglish, isAll } = useLanguageFilter();
 
   useEffect(() => {
     let cancelled = false;
@@ -21,16 +21,9 @@ export default function MangaDetails() {
     async function loadData() {
       setLoading(true);
       try {
-        // Obtener detalles del manga
         const mangaData = await providerService.getMangaDetails(id);
         if (!cancelled && mangaData) {
           setManga(mangaData);
-        }
-
-        // Obtener capítulos en español
-        const chapterData = await providerService.getChapters(id, 'es');
-        if (!cancelled) {
-          setChapters(chapterData);
         }
       } catch {
         if (!cancelled) {
@@ -51,6 +44,18 @@ export default function MangaDetails() {
     router.push(`/reader/${manga?.id}/${chapter.id}`);
   };
 
+  // Filtrar capítulos por idioma seleccionado
+  const chapters = manga?.chapters || [];
+  const filteredChapters = chapters.filter((c) => {
+    if (isAll) return true;
+    if (isSpanish) return c.language === 'es';
+    if (isEnglish) return c.language === 'en';
+    return true;
+  });
+
+  const spanishCount = chapters.filter((c) => c.language === 'es').length;
+  const englishCount = chapters.filter((c) => c.language === 'en').length;
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-dark-900">
@@ -69,8 +74,6 @@ export default function MangaDetails() {
       </div>
     );
   }
-
-  const spanishChapters = chapters.filter((c) => isSpanish(c.language));
 
   return (
     <div className="min-h-screen bg-dark-900 text-dark-100">
@@ -96,16 +99,38 @@ export default function MangaDetails() {
                 alt={`Portada de ${manga.title}`}
                 className="w-full rounded-lg shadow-xl bg-dark-800"
                 loading="lazy"
+                onError={(e) => {
+                  // Si la imagen falla, mostrar placeholder
+                  (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjQ1MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2aWV3Qm94PSIwIDAgMzAwIDQ1MCI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iIzIzMiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIwLjM2ZW0iPlNpbiBwb3J0YWRhPC90ZXh0Pjwvc3ZnPg==';
+                }}
               />
             ) : (
               <div className="w-full h-96 bg-dark-800 rounded-lg flex items-center justify-center text-dark-500">
-                Sin portada
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-dark-600 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <p>Sin portada disponible</p>
               </div>
             )}
           </div>
 
           <div className="lg:w-2/3 flex flex-col">
-            <h1 className="text-3xl font-bold mb-2">{manga.title}</h1>
+            <div className="flex items-center gap-2 mb-2">
+              <h1 className="text-3xl font-bold mb-2">{manga.title}</h1>
+              <div className="flex gap-1">
+                {spanishCount > 0 && (
+                  <span className="text-xs bg-green-900/30 text-green-400 px-2 py-0.5 rounded border border-green-500/30">
+                    ES ({spanishCount})
+                  </span>
+                )}
+                {englishCount > 0 && (
+                  <span className="text-xs bg-blue-900/30 text-blue-400 px-2 py-0.5 rounded border border-blue-500/30">
+                    EN ({englishCount})
+                  </span>
+                )}
+              </div>
+            </div>
+
             <div className="flex flex-wrap gap-2 mb-4">
               {manga.genres.map((genre) => (
                 <span key={genre} className="text-sm bg-dark-800 text-dark-300 px-3 py-1 rounded border border-dark-600">
@@ -132,23 +157,41 @@ export default function MangaDetails() {
           </div>
         </div>
 
-        {/* Lista de capítulos */}
+        {/* Selector de idioma y lista de capítulos */}
         <section>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-dark-100">
-              Capítulos ({spanishChapters.length})
-            </h2>
-            {spanishChapters.length < chapters.length && (
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-semibold text-dark-100">
+                Capítulos ({filteredChapters.length})
+              </h2>
+              <div className="flex items-center gap-2 bg-dark-800 px-3 py-1.5 rounded border border-dark-600">
+                <span className="text-xs text-dark-400 uppercase">Filtrar:</span>
+                <select
+                  value={language}
+                  onChange={(e) => setLanguageFilter(e.target.value as any)}
+                  className="bg-dark-900 text-dark-100 text-xs border-none focus:ring-0 px-2 py-0.5 rounded"
+                >
+                  <option value="all">Todos (ES + EN)</option>
+                  <option value="es">Español</option>
+                  <option value="en">Inglés</option>
+                </select>
+              </div>
+            </div>
+            {filteredChapters.length < chapters.length && (
               <span className="text-xs text-orange-400 bg-orange-900/20 px-2 py-1 rounded">
-                Algunos capítulos no están en español
+                Filtrando por idioma
               </span>
             )}
           </div>
 
-          {spanishChapters.length === 0 && (
+          {filteredChapters.length === 0 && (
             <div className="p-8 text-center bg-dark-800/50 rounded-lg border border-dark-700">
               <p className="text-dark-400">
-                Este manga no tiene capítulos disponibles en español.
+                {isAll
+                  ? 'Este manga no tiene capítulos disponibles.'
+                  : isSpanish
+                  ? 'Este manga no tiene capítulos disponibles en español.'
+                  : 'Este manga no tiene capítulos disponibles en inglés.'}
               </p>
               <p className="text-xs text-dark-500 mt-2">
                 El idioma se verifica por capítulo, no solo por manga.
@@ -157,7 +200,7 @@ export default function MangaDetails() {
           )}
 
           <ChapterList
-            chapters={spanishChapters}
+            chapters={filteredChapters}
             onChapterSelect={handleChapterSelect}
           />
         </section>

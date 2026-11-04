@@ -5,26 +5,39 @@ import SearchBar from '@/components/SearchBar';
 import MangaGrid from '@/components/MangaGrid';
 import { useMangaCatalog } from '@/hooks/useMangaCatalog';
 import { useContinueReading } from '@/hooks/useContinueReading';
+import { useLanguageFilter } from '@/hooks/useLanguageFilter';
 import { Manga } from '@/models';
 
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Manga[]>([]);
-  const { mangas, loading, error, hasMore, loadMore, refresh } = useMangaCatalog(1, 20);
+  const { mangas, loading, error, hasMore, loadMore } = useMangaCatalog(1, 20);
   const { entries: continueReadingEntries, navigateToChapter } = useContinueReading();
+  const { language, setLanguageFilter, isSpanish, isEnglish, isAll } = useLanguageFilter();
 
-  const mangasToShow = searchQuery.trim() ? searchResults : mangas;
+  // Filtrar mangas por idioma seleccionado
+  const filterMangasByLanguage = (mangasList: Manga[]): Manga[] => {
+    if (isAll) return mangasList;
+
+    return mangasList.filter((manga) => {
+      const spanishChapters = manga.chapters.filter((c) => c.language === 'es');
+      const englishChapters = manga.chapters.filter((c) => c.language === 'en');
+
+      if (isSpanish) return spanishChapters.length > 0;
+      if (isEnglish) return englishChapters.length > 0;
+      return true;
+    });
+  };
+
+  const filteredMangas = filterMangasByLanguage(searchQuery.trim() ? searchResults : mangas);
 
   const handleSearch = async (query: string) => {
     setSearchQuery(query);
     if (query.trim()) {
-      // El hook useMangaCatalog ya busca en el catálogo, pero para búsqueda
-      // activa necesitamos usar providerService directamente
-      // Por ahora, usamos los resultados del catálogo filtrados localmente
-      // hasta que se implemente searchManga completo en el proveedor
-      setSearchResults(mangas.filter((m) =>
+      const results = mangas.filter((m) =>
         m.title.toLowerCase().includes(query.toLowerCase())
-      ));
+      );
+      setSearchResults(results);
     } else {
       setSearchResults([]);
     }
@@ -33,8 +46,8 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-dark-900 text-dark-100">
       <Head>
-        <title>Mangas - Lectura de manga en español</title>
-        <meta name="description" content="Descubre y lee mangas con capítulos en español de proveedores verificados." />
+        <title>Mangas - Lectura de manga en español e inglés</title>
+        <meta name="description" content="Descubre y lee mangas con capítulos en español e inglés de proveedores verificados." />
       </Head>
 
       <header className="border-b border-dark-700 bg-dark-900/80 backdrop-blur sticky top-0 z-40">
@@ -42,9 +55,21 @@ export default function Home() {
           <div className="flex items-center justify-between h-16">
             <Link href="/" className="flex items-center gap-2">
               <span className="text-xl font-bold text-accent-purple">Mangas</span>
-              <span className="text-xs text-dark-400 uppercase tracking-wider">es</span>
+              <span className="text-xs text-dark-400 uppercase tracking-wider">es/en</span>
             </Link>
             <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 bg-dark-800 px-3 py-1.5 rounded border border-dark-600">
+                <span className="text-xs text-dark-400 uppercase">Idioma:</span>
+                <select
+                  value={language}
+                  onChange={(e) => setLanguageFilter(e.target.value as any)}
+                  className="bg-dark-900 text-dark-100 text-xs border-none focus:ring-0 px-2 py-0.5 rounded"
+                >
+                  <option value="all">Español + Inglés</option>
+                  <option value="es">Español</option>
+                  <option value="en">Inglés</option>
+                </select>
+              </div>
               <a
                 href="https://github.com/public-apis/public-apis#anime"
                 target="_blank"
@@ -120,7 +145,7 @@ export default function Home() {
             </div>
           )}
 
-          <MangaGrid mangas={mangasToShow} />
+          <MangaGrid mangas={filteredMangas} />
 
           {loading && <p className="mt-4 text-dark-500">Cargando más...</p>}
 

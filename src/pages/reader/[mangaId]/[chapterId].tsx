@@ -7,6 +7,8 @@ import { useContinueReading } from '@/hooks/useContinueReading';
 import MangaReader from '@/components/MangaReader';
 import ReaderControls from '@/components/ReaderControls';
 
+type LoadState = 'idle' | 'loading' | 'success' | 'empty' | 'error';
+
 interface ChapterNavigation {
   previous?: Chapter;
   next?: Chapter;
@@ -18,44 +20,71 @@ export default function Reader() {
   const [chapter, setChapter] = useState<Chapter | null>(null);
   const [pages, setPages] = useState<Page[]>([]);
   const [allChapters, setAllChapters] = useState<Chapter[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loadState, setLoadState] = useState<LoadState>('loading');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { save: saveContinueReading } = useContinueReading();
 
   const loadChapter = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    setLoadState('loading');
+    setErrorMessage(null);
+
     try {
-      // Obtener páginas del capítulo vía API proxy
-      const response = await fetch(`/api/manga-dex/chapter/${chapterId}/pages`);
-      if (!response.ok) throw new Error('No se pudieron cargar las páginas');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-      const data = await response.json();
-      setPages(data.pages || []);
+      try {
+        // Usar el endpoint de Comix API para obtener páginas del capítulo
+        const response = await fetch(`/api/comix/chapter/${encodeURIComponent(chapterId)}/pages`, {
+          signal: controller.signal,
+          headers: {
+            Accept: 'application/json',
+          },
+        });
 
-      // Guardar en historial de continuar leyendo
-      const mangaTitle = chapter?.title || mangaId;
-      saveContinueReading({
-        mangaId,
-        title: mangaTitle,
-        chapterId,
-        chapterNumber: chapter?.number,
-        chapterTitle: chapter?.title,
-        scrollPosition: 0,
-      });
-    } catch {
-      setError('No se pudieron cargar las páginas del capítulo.');
-    } finally {
-      setLoading(false);
+        if (!response.ok) {
+          throw new Error(`Error ${response.status} al cargar páginas`);
+        }
+
+        const data = await response.json();
+        const fetchedPages: Page[] = data.pages || [];
+
+        setPages(fetchedPages);
+
+        if (fetchedPages.length === 0) {
+          setLoadState('empty');
+        } else {
+          setLoadState('success');
+        }
+
+        // Guardar en historial de continuar leyendo
+        const mangaTitle = chapter?.title || mangaId;
+        saveContinueReading({
+          mangaId,
+          title: mangaTitle,
+          chapterId,
+          chapterNumber: chapter?.number,
+          chapterTitle: chapter?.title,
+          scrollPosition: 0,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    } catch (error) {
+      console.error('[Reader] Error loading chapter pages:', error);
+      if (error instanceof Error && error.name === 'AbortError') {
+        setErrorMessage('El tiempo de espera se agotó al cargar el capítulo.');
+      } else {
+        setErrorMessage('No se pudieron cargar las páginas del capítulo.');
+      }
+      setLoadState('error');
     }
-  }, [chapterId, mangaId, saveContinueReading, chapter]);
+  }, [chapterId, mangaId, chapter, saveContinueReading]);
 
   const loadChapters = useCallback(async () => {
     try {
       const chapters = await providerService.getChapters(mangaId, 'es');
       setAllChapters(chapters);
 
-      // Encontrar el capítulo actual en la lista
       const currentChapter = chapters.find((c) => c.id === chapterId);
       if (currentChapter) {
         setChapter(currentChapter);
@@ -73,7 +102,10 @@ export default function Reader() {
   // Encontrar capítulos anterior y siguiente
   const currentIndex = allChapters.findIndex((c) => c.id === chapterId);
   const previousChapter = currentIndex > 0 ? allChapters[currentIndex - 1] : undefined;
-  const nextChapter = currentIndex >= 0 && currentIndex < allChapters.length - 1 ? allChapters[currentIndex + 1] : undefined;
+  const nextChapter =
+    currentIndex >= 0 && currentIndex < allChapters.length - 1
+      ? allChapters[currentIndex + 1]
+      : undefined;
 
   const handlePreviousChapter = () => {
     if (previousChapter) {
@@ -91,7 +123,8 @@ export default function Reader() {
     console.error(`[Reader] Error cargando página ${pageIndex + 1}`);
   };
 
-  if (loading) {
+  // Estados de visualización
+  if (loadState === 'loading') {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-dark-900">
         <p className="text-dark-400">Cargando capítulo...</p>
@@ -99,10 +132,10 @@ export default function Reader() {
     );
   }
 
-  if (error || pages.length === 0) {
+  if (loadState === 'error') {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-dark-900 text-dark-400">
-        <p>{error || 'Este capítulo no tiene páginas disponibles.'}</p>
+        <p>{errorMessage || 'Error al cargar el capítulo.'}</p>
         <button
           onClick={() => router.back()}
           className="mt-4 px-4 py-2 bg-dark-800 hover:bg-dark-700 text-dark-100 rounded border border-dark-600"
@@ -113,7 +146,20 @@ export default function Reader() {
     );
   }
 
-  // Obtener número de capítulo para mostrar
+  if (loadState === 'empty' || pages.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-dark-900 text-dark-400">
+        <p>Este capítulo no tiene páginas disponibles.</p>
+        <button
+          onClick={() => router.back()}
+          className="mt-4 px-4 py-2 bg-dark-800 hover:bg-dark-700 text-dark-100 rounded border border-dark-600"
+        >
+          Volver al manga
+        </button>
+      </div>
+    );
+  }
+
   const chapterNumber = chapter?.number || '?';
   const chapterTitle = chapter?.title;
 

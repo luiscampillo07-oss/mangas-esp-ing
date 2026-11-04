@@ -235,7 +235,7 @@ describe('comixAdapter - getMangaDetails', () => {
 });
 
 describe('comixAdapter - getChapters', () => {
-  it('obtiene capítulos de un manga', async () => {
+  it('obtiene capítulos filtrados por idioma español', async () => {
     mockFetch.mockResolvedValueOnce(
       mockSuccessResponse({
         result: {
@@ -244,12 +244,14 @@ describe('comixAdapter - getChapters', () => {
               id: 'chapter-1',
               chapter: '1',
               title: 'Capítulo 1',
+              language: 'es',
               link: '/title/manga/chapter/1',
             },
             {
               id: 'chapter-2',
               chapter: '2',
               title: 'Capítulo 2',
+              language: 'en',
               link: '/title/manga/chapter/2',
             },
           ],
@@ -259,10 +261,55 @@ describe('comixAdapter - getChapters', () => {
     );
 
     const chapters = await comixAdapter.getChapters!('manga-1', 'es');
-    expect(chapters.length).toBe(2);
+    expect(chapters.length).toBe(1);
     expect(chapters[0].number).toBe('1');
     expect(chapters[0].title).toBe('Capítulo 1');
     expect(chapters[0].language).toBe('es');
+  });
+
+  it('obtiene capítulos en inglés cuando se solicita', async () => {
+    mockFetch.mockResolvedValueOnce(
+      mockSuccessResponse({
+        result: {
+          items: [
+            {
+              id: 'chapter-1',
+              chapter: '1',
+              title: 'Chapter 1',
+              language: 'en',
+              link: '/title/manga/chapter/1',
+            },
+          ],
+          pagination: { last_page: 1 },
+        },
+      })
+    );
+
+    const chapters = await comixAdapter.getChapters!('manga-1', 'en');
+    expect(chapters.length).toBe(1);
+    expect(chapters[0].language).toBe('en');
+  });
+
+  it('devuelve array vacío cuando no hay capítulos en el idioma solicitado', async () => {
+    mockFetch.mockResolvedValueOnce(
+      mockSuccessResponse({
+        result: {
+          items: [
+            {
+              id: 'chapter-1',
+              chapter: '1',
+              title: 'Capítulo 1',
+              language: 'es',
+              link: '/title/manga/chapter/1',
+            },
+          ],
+          pagination: { last_page: 1 },
+        },
+      })
+    );
+
+    const chapters = await comixAdapter.getChapters!('manga-1', 'en');
+    expect(chapters).toEqual([]);
   });
 
   it('devuelve array vacío cuando no hay capítulos', async () => {
@@ -282,6 +329,7 @@ describe('comixAdapter - getChapters', () => {
             id: 'chapter-1',
             chapter: '1',
             title: 'Capítulo 1',
+            language: 'es',
             link: '/title/manga/chapter/1',
           },
         ],
@@ -291,19 +339,41 @@ describe('comixAdapter - getChapters', () => {
     const chapters = await comixAdapter.getChapters!('manga-1', 'es');
     expect(chapters.length).toBe(1);
   });
+
+  it('excluye capítulos en japonés', async () => {
+    mockFetch.mockResolvedValueOnce(
+      mockSuccessResponse({
+        result: {
+          items: [
+            {
+              id: 'chapter-1',
+              chapter: '1',
+              title: 'Capítulo 1',
+              language: 'ja',
+              link: '/title/manga/chapter/1',
+            },
+          ],
+          pagination: { last_page: 1 },
+        },
+      })
+    );
+
+    const chapters = await comixAdapter.getChapters!('manga-1', 'es');
+    expect(chapters.length).toBe(0);
+  });
 });
 
 describe('comixAdapter - getChapterPages', () => {
-  it('obtiene páginas de un capítulo con URLs de imagen', async () => {
+  it('obtiene páginas de un capítulo vía endpoint del servidor', async () => {
     mockFetch.mockResolvedValueOnce(
       mockSuccessResponse({
         chapterId: 'chapter-1',
-        total_images: 3,
-        images: [
-          { url: '/api/image?url=https://cdn.com/page1.jpg' },
-          { url: '/api/image?url=https://cdn.com/page2.jpg' },
-          { url: '/api/image?url=https://cdn.com/page3.jpg' },
+        pages: [
+          { id: 'page-1', imageUrl: '/api/comix/image?url=test1.jpg', order: 1 },
+          { id: 'page-2', imageUrl: '/api/comix/image?url=test2.jpg', order: 2 },
+          { id: 'page-3', imageUrl: '/api/comix/image?url=test3.jpg', order: 3 },
         ],
+        totalPages: 3,
       })
     );
 
@@ -312,38 +382,41 @@ describe('comixAdapter - getChapterPages', () => {
     expect(pages[0].order).toBe(1);
     expect(pages[1].order).toBe(2);
     expect(pages[2].order).toBe(3);
-    expect(pages[0].imageUrl).toContain('/api/image?url=');
-    expect(pages[1].imageUrl).toContain('/api/image?url=');
-    expect(pages[2].imageUrl).toContain('/api/image?url=');
+    expect(pages[0].imageUrl).toContain('/api/comix/image?url=');
   });
 
   it('devuelve array vacío cuando no hay páginas', async () => {
     mockFetch.mockResolvedValueOnce(
-      mockSuccessResponse({ chapterId: 'chapter-1', total_images: 0, images: [] })
+      mockSuccessResponse({ chapterId: 'chapter-1', pages: [], totalPages: 0 })
     );
 
     const pages = await comixAdapter.getChapterPages!('chapter-1');
     expect(pages).toEqual([]);
   });
 
-  it('devuelve array vacío cuando el endpoint de lectura falla', async () => {
+  it('devuelve array vacío cuando el endpoint falla', async () => {
     mockFetch.mockRejectedValueOnce(new TypeError('failed to fetch'));
 
     const pages = await comixAdapter.getChapterPages!('chapter-1');
     expect(pages).toEqual([]);
   });
 
-  it('convierte URLs de imagen relativas a absolutas', async () => {
+  it('extrae el ID original de Comix quitando prefijo comix-', async () => {
     mockFetch.mockResolvedValueOnce(
       mockSuccessResponse({
         chapterId: 'chapter-1',
-        total_images: 1,
-        images: [{ url: '/images/covers/page.jpg' }],
+        pages: [
+          { id: 'page-1', imageUrl: '/api/comix/image?url=test.jpg', order: 1 },
+        ],
+        totalPages: 1,
       })
     );
 
-    const pages = await comixAdapter.getChapterPages!('chapter-1');
-    expect(pages[0].imageUrl).toContain('/api/image?url=');
+    await comixAdapter.getChapterPages!('comix-chapter-1');
+
+    const callUrl = mockFetch.mock.calls[0][0] as string;
+    expect(callUrl).toContain('/api/comix/chapter/chapter-1/pages');
+    expect(callUrl).not.toContain('/api/comix/chapter/comix-chapter-1/pages');
   });
 });
 

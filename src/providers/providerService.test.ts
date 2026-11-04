@@ -4,6 +4,16 @@ import { providerRegistry } from './registry';
 import { MangaProvider } from './interfaces/provider.interface';
 import { Manga, Chapter } from '@/models';
 
+const mockChapter: Chapter = {
+  id: 'provider-c1',
+  mangaId: 'm1',
+  number: '1',
+  title: 'Capítulo 1',
+  publishedAt: '2024-01-01T00:00:00Z',
+  language: 'es',
+  pages: [],
+};
+
 const mockManga: Manga = {
   id: 'provider-m1',
   slug: 'test-manga',
@@ -16,18 +26,8 @@ const mockManga: Manga = {
   language: 'es',
   sourceId: 'm1',
   sourceUrl: 'https://example.com/title/m1',
-  chapters: [],
+  chapters: [mockChapter],
   updatedAt: '2024-01-01T00:00:00Z',
-};
-
-const mockChapter: Chapter = {
-  id: 'provider-c1',
-  mangaId: 'm1',
-  number: '1',
-  title: 'Capítulo 1',
-  publishedAt: '2024-01-01T00:00:00Z',
-  language: 'es',
-  pages: [],
 };
 
 /**
@@ -39,11 +39,13 @@ function createMockProvider(overrides: Partial<MangaProvider> = {}): MangaProvid
     name: 'Mock Provider',
     active: true,
     status: 'APPROVED',
-    providerType: ['Metadata Provider'],
+    providerType: ['Metadata Provider', 'Chapter Provider', 'Page Provider'],
     allowedLanguages: ['es', 'en'],
     baseUrl: 'https://mock.example.com',
     documentationUrl: 'https://mock.example.com/docs',
     checkAvailability: vi.fn().mockResolvedValue(true),
+    getChapters: vi.fn().mockResolvedValue([mockChapter]),
+    getChapterPages: vi.fn().mockResolvedValue([]),
     ...overrides,
   };
   return base;

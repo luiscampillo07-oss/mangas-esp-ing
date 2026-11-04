@@ -71,6 +71,30 @@ export class ProviderService {
 
     const deduped = this.deduplicate(results);
 
+    // Cargar capítulos en español e inglés para cada manga (en paralelo)
+    // para filtrar solo aquellos que tienen capítulos en idiomas soportados
+    const mangasWithChapters: Manga[] = [];
+    const chapterOutcomes = await Promise.allSettled(
+      deduped.map(async (manga) => {
+        try {
+          const chapters = await this.getChapters(manga.sourceId, 'all');
+          if (chapters.length > 0) {
+            return { ...manga, chapters };
+          }
+          // Manga sin capítulos disponibles en español ni inglés - excluir
+          return null;
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    chapterOutcomes.forEach((outcome) => {
+      if (outcome.status === 'fulfilled' && outcome.value) {
+        mangasWithChapters.push(outcome.value);
+      }
+    });
+
     const realFailures = attempts.filter(
       (a) => !a.success && a.error !== 'El proveedor no soporta getCatalog'
     );
@@ -78,14 +102,14 @@ export class ProviderService {
       realFailures.length > 0 &&
       realFailures.length === attempts.filter((a) => a.error !== 'El proveedor no soporta getCatalog').length;
 
-    if (providers.length > 0 && deduped.length === 0 && allFailed) {
+    if (providers.length > 0 && mangasWithChapters.length === 0 && allFailed) {
       const failedProviders = realFailures.map((a) => a.providerName).join(', ');
       throw new Error(
         `No se pudo cargar el catálogo. Todos los proveedores fallaron: ${failedProviders}. Inténtelo de nuevo más tarde.`
       );
     }
 
-    return deduped;
+    return mangasWithChapters;
   }
 
   /**
@@ -140,6 +164,28 @@ export class ProviderService {
 
     const deduped = this.deduplicate(results);
 
+    // Cargar capítulos en español e inglés para cada resultado (en paralelo)
+    const mangasWithChapters: Manga[] = [];
+    const chapterOutcomes = await Promise.allSettled(
+      deduped.map(async (manga) => {
+        try {
+          const chapters = await this.getChapters(manga.sourceId, 'all');
+          if (chapters.length > 0) {
+            return { ...manga, chapters };
+          }
+          return null;
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    chapterOutcomes.forEach((outcome) => {
+      if (outcome.status === 'fulfilled' && outcome.value) {
+        mangasWithChapters.push(outcome.value);
+      }
+    });
+
     const realFailures = attempts.filter(
       (a) => !a.success && a.error !== 'El proveedor no soporta searchManga'
     );
@@ -147,14 +193,14 @@ export class ProviderService {
       realFailures.length > 0 &&
       realFailures.length === attempts.filter((a) => a.error !== 'El proveedor no soporta searchManga').length;
 
-    if (providers.length > 0 && deduped.length === 0 && allFailed) {
+    if (providers.length > 0 && mangasWithChapters.length === 0 && allFailed) {
       const failedProviders = realFailures.map((a) => a.providerName).join(', ');
       throw new Error(
         `No se pudo realizar la búsqueda. Todos los proveedores fallaron: ${failedProviders}. Inténtelo de nuevo más tarde.`
       );
     }
 
-    return deduped;
+    return mangasWithChapters;
   }
 
   /**
