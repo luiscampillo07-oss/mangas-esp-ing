@@ -1,20 +1,12 @@
 import { MangaProvider } from '@/providers/interfaces';
 import { Manga, Chapter, Page } from '@/models';
 
-const BASE_URL = 'https://api.mangadex.org';
-
 /**
- * Headers completos requeridos por MangaDex para evitar bloqueos.
- * Incluye User-Agent, Referer y Accept-Language para simular un navegador real.
+ * URL base del proxy de MangaDex (Next.js API Route).
+ * Todas las peticiones a MangaDex se hacen a través de nuestro propio servidor
+ * para evitar bloqueos 403 desde el cliente y problemas de CORS.
  */
-const MANGADEX_HEADERS: Record<string, string> = {
-  Accept: 'application/json',
-  'User-Agent':
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 MangasApp/1.0.0',
-  'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-  Referer: 'https://mangadex.org/',
-  Origin: 'https://mangadex.org',
-};
+const PROXY_BASE_URL = '/api/manga-dex/proxy';
 
 /**
  * Tipos de error reconocidos del adaptador MangaDex.
@@ -80,11 +72,11 @@ async function fetchMangaDex<T>(
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const response = await fetch(`${BASE_URL}${endpoint}`, {
+      const response = await fetch(`${PROXY_BASE_URL}${endpoint}`, {
         ...options,
         signal: controller.signal,
         headers: {
-          ...MANGADEX_HEADERS,
+          Accept: 'application/json',
           ...options.headers,
         },
       });
@@ -227,7 +219,9 @@ function normalizeManga(manga: any): Manga {
 
   const coverRelationship = manga.relationships?.find((r: any) => r.type === 'cover_art');
   const coverFileName = coverRelationship?.attributes?.fileName;
-  const coverUrl = coverFileName ? `${BASE_URL}/cover/${manga.id}/${coverFileName}` : undefined;
+  const coverUrl = coverFileName
+    ? `${PROXY_BASE_URL}/cover/${manga.id}/${coverFileName}`
+    : undefined;
 
   // Extraer autor/artista de las relaciones
   const authorRelationship = manga.relationships?.find(
@@ -280,7 +274,7 @@ export const mangadexAdapter: MangaProvider = {
   status: 'APPROVED',
   providerType: ['Metadata Provider', 'Cover Provider', 'Chapter Provider', 'Page Provider'],
   allowedLanguages: ['es', 'es-la', 'en', 'ja'],
-  baseUrl: BASE_URL,
+  baseUrl: PROXY_BASE_URL,
   documentationUrl: 'https://api.mangadex.org/docs/redoc.html',
 
   async checkAvailability(): Promise<boolean> {

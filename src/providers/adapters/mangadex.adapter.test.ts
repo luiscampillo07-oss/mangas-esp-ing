@@ -186,19 +186,16 @@ describe('mangadexAdapter - getCatalog', () => {
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
-  it('agrega User-Agent y headers en todas las peticiones', async () => {
+  it('llama al proxy de MangaDex con la URL correcta', async () => {
     mockFetch.mockResolvedValueOnce(mockSuccessResponse({ result: 'ok', data: [] }));
 
     await mangadexAdapter.getCatalog!(1, 20);
 
     expect(mockFetch).toHaveBeenCalledWith(
-      expect.stringContaining('/manga'),
+      expect.stringContaining('/api/manga-dex/proxy/manga'),
       expect.objectContaining({
         headers: expect.objectContaining({
-          'User-Agent': expect.stringContaining('Mozilla/5.0'),
-          Referer: 'https://mangadex.org/',
-          Origin: 'https://mangadex.org',
-          'Accept-Language': expect.stringContaining('es-ES'),
+          Accept: 'application/json',
         }),
       })
     );
