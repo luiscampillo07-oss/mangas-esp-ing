@@ -3,32 +3,65 @@ import { Manga, Chapter, Page } from '@/models';
 import { providerRegistry } from '@/providers/registry';
 
 /**
+ * Estado de un intento de proveedor.
+ */
+interface ProviderAttempt {
+  providerId: string;
+  providerName: string;
+  success: boolean;
+  error?: string;
+  results?: any[];
+}
+
+/**
  * Servicio de proveedores: orquesta las llamadas a los adaptadores registrados,
  * tolerante a fallos (si un proveedor falla, los demás continúan).
  */
 export class ProviderService {
   /**
    * Obtiene el catálogo consolidado de todos los proveedores activos.
-   * Elimina duplicados por sourceId.
+   * Si todos fallan, lanza un error con mensaje claro para la UI.
+   * Si algunos fallan, devuelve los resultados de los que funcionaron.
    */
   async getCatalog(page = 1, limit = 20): Promise<Manga[]> {
     const providers = providerRegistry.getActiveProviders();
     const results: Manga[] = [];
+    const attempts: ProviderAttempt[] = [];
 
     // Ejecutar llamadas en paralelo, tolerando fallos individuales
     const outcomes = await Promise.allSettled(
       providers.map(async (p) => {
-        if (!p.getCatalog) return [];
+        if (!p.getCatalog) {
+          attempts.push({
+            providerId: p.id,
+            providerName: p.name,
+            success: false,
+            error: 'El proveedor no soporta getCatalog',
+          });
+          return [];
+        }
         try {
-          return await p.getCatalog(page, limit);
+          const data = await p.getCatalog(page, limit);
+          attempts.push({
+            providerId: p.id,
+            providerName: p.name,
+            success: true,
+            results: data,
+          });
+          return data;
         } catch (error) {
+          const message = error instanceof Error ? error.message : 'Error desconocido';
+          attempts.push({
+            providerId: p.id,
+            providerName: p.name,
+            success: false,
+            error: message,
+          });
           console.error(`[ProviderService] Error en getCatalog de ${p.id}:`, error);
           return [];
         }
       })
     );
-
-    const hasErrors = outcomes.some((o) => o.status === 'rejected');
 
     outcomes.forEach((outcome) => {
       if (outcome.status === 'fulfilled') {
@@ -38,10 +71,21 @@ export class ProviderService {
 
     const deduped = this.deduplicate(results);
 
-    // Si hay proveedores activos pero ninguno devolvió resultados, lanzar error
-    // para que la UI muestre un mensaje claro al usuario
-    if (providers.length > 0 && deduped.length === 0 && hasErrors) {
-      throw new Error('No se pudo cargar el catálogo. Los proveedores de contenido no están disponibles temporalmente.');
+    // Si hay proveedores activos pero ninguno devolvió resultados y todos fallaron
+    // (excluyendo proveedores que simplemente no implementan el método),
+    // lanzar error para que la UI muestre un mensaje claro
+    const realFailures = attempts.filter(
+      (a) => !a.success && a.error !== 'El proveedor no soporta getCatalog'
+    );
+    const allFailed =
+      realFailures.length > 0 &&
+      realFailures.length === attempts.filter((a) => a.error !== 'El proveedor no soporta getCatalog').length;
+
+    if (providers.length > 0 && deduped.length === 0 && allFailed) {
+      const failedProviders = realFailures.map((a) => a.providerName).join(', ');
+      throw new Error(
+        `No se pudo cargar el catálogo. Todos los proveedores fallaron: ${failedProviders}. Inténtelo de nuevo más tarde.`
+      );
     }
 
     return deduped;
@@ -55,20 +99,41 @@ export class ProviderService {
 
     const providers = providerRegistry.getActiveProviders();
     const results: Manga[] = [];
+    const attempts: ProviderAttempt[] = [];
 
     const outcomes = await Promise.allSettled(
       providers.map(async (p) => {
-        if (!p.searchManga) return [];
+        if (!p.searchManga) {
+          attempts.push({
+            providerId: p.id,
+            providerName: p.name,
+            success: false,
+            error: 'El proveedor no soporta searchManga',
+          });
+          return [];
+        }
         try {
-          return await p.searchManga(query);
+          const data = await p.searchManga(query);
+          attempts.push({
+            providerId: p.id,
+            providerName: p.name,
+            success: true,
+            results: data,
+          });
+          return data;
         } catch (error) {
+          const message = error instanceof Error ? error.message : 'Error desconocido';
+          attempts.push({
+            providerId: p.id,
+            providerName: p.name,
+            success: false,
+            error: message,
+          });
           console.error(`[ProviderService] Error en searchManga de ${p.id}:`, error);
           return [];
         }
       })
     );
-
-    const hasErrors = outcomes.some((o) => o.status === 'rejected');
 
     outcomes.forEach((outcome) => {
       if (outcome.status === 'fulfilled') {
@@ -78,8 +143,18 @@ export class ProviderService {
 
     const deduped = this.deduplicate(results);
 
-    if (providers.length > 0 && deduped.length === 0 && hasErrors) {
-      throw new Error('No se pudo realizar la búsqueda. Los proveedores de contenido no están disponibles temporalmente.');
+    const realFailures = attempts.filter(
+      (a) => !a.success && a.error !== 'El proveedor no soporta searchManga'
+    );
+    const allFailed =
+      realFailures.length > 0 &&
+      realFailures.length === attempts.filter((a) => a.error !== 'El proveedor no soporta searchManga').length;
+
+    if (providers.length > 0 && deduped.length === 0 && allFailed) {
+      const failedProviders = realFailures.map((a) => a.providerName).join(', ');
+      throw new Error(
+        `No se pudo realizar la búsqueda. Todos los proveedores fallaron: ${failedProviders}. Inténtelo de nuevo más tarde.`
+      );
     }
 
     return deduped;
@@ -152,7 +227,25 @@ export class ProviderService {
   }
 
   /**
-   * Elimina mangas duplicados basándose en sourceId y título similar.
+   * Comprueba la disponibilidad de todos los proveedores activos.
+   */
+  async checkAllProvidersAvailability(): Promise<Record<string, boolean>> {
+    const providers = providerRegistry.getActiveProviders();
+    const results: Record<string, boolean> = {};
+
+    for (const p of providers) {
+      try {
+        results[p.id] = await p.checkAvailability();
+      } catch {
+        results[p.id] = false;
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Elimina mangas duplicados basándose en sourceId.
    * No une automáticamente cuando existe incertidumbre.
    */
   private deduplicate(mangas: Manga[]): Manga[] {
