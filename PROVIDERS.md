@@ -19,18 +19,42 @@ Documentación de proveedores de datos y contenido para la aplicación de lectur
 | **Idiomas** | `es` (Castilian Spanish), `es-la` (Latin American Spanish), `en`, `ja`, y muchos más (ISO 639-1) |
 | **Contenido en español** | Sí, se pueden filtrar capítulos por `translatedLanguage[]=es` |
 | **Autenticación** | No requerida para endpoints públicos de lectura |
-| **Límites de peticiones** | Rate limits aplicables (consultar documentación); entorno de desarrollo disponible en `https://api.mangadex.dev` |
+| **Límites de peticiones** | Rate limits aplicables (consultar documentación) |
 | **Licencia de datos** | Contenido de la comunidad (scanlations) |
 | **Licencia de imágenes** | Contenido subido por grupos de scanlation |
 | **Términos de uso** | https://api.mangadex.org/docs/ (Acceptable use policy) |
-| **Permisos de reproducción y distribución** | **Debe creditarsse a MangaDex y a los scanlation groups si se ofrecen capítulos para lectura.** CORS no permite hotlinking directo de imágenes desde el navegador (requiere proxy del servidor para el lector). |
-| **Estado de integración** | UNDER_REVIEW (pendiente de verificar CORS y política de uso comercial) |
-| **Limitaciones conocidas** | 1. CORS restringe hotlinking de imágenes — las imágenes del lector deben servirse a través de un proxy del backend. 2. El contenido proviene de scanlations comunitarias, no siempre de editores oficiales. |
+| **Permisos de reproducción y distribución** | **Debe creditarsse a MangaDex y a los scanlation groups si se ofrecen capítulos para lectura.** CORS no permite hotlinking directo de imágenes desde el navegador (requiere proxy del servidor). **No se puede usar comercialmente (no se pueden mostrar anuncios).** |
+| **Estado de integración** | DISABLED |
+| **Limitaciones conocidas** | 1. MangaDex bloquea solicitudes (403 Forbidden) desde direcciones IP de servidores/centros de datos. Funciona desde localhost durante desarrollo. 2. CORS restringe hotlinking de imágenes — las imágenes del lector deben servirse a través de un proxy del backend. 3. El contenido proviene de scanlations comunitarias, no siempre de editores oficiales. 4. No se permite uso comercial. |
 | **Fecha de última comprobación** | 04/11/2026 |
 
 ---
 
-## 2. Jikan (Unofficial MyAnimeList API)
+## 2. Comix API
+
+| Campo | Valor |
+|---|---|
+| **Nombre** | Comix API |
+| **Página oficial** | https://github.com/yurtzy/comix-api |
+| **Documentación** | https://github.com/yurtzy/comix-api (README con endpoints) |
+| **URL base** | https://comix-api.vercel.app/api/manga |
+| **Tipo de proveedor** | Combined Provider (Metadata + Cover + Chapter + Page) |
+| **Funcionalidades disponibles** | Catálogo de mangas, búsqueda por título, detalles de manga, portada, lista de capítulos, imágenes de páginas de capítulo |
+| **Idiomas** | Soporta múltiples idiomas según el contenido upstream (incluye `es`, `es-la`, `en`, `ja` según MangaFire/Tachiyomi) |
+| **Contenido en español** | Soporta filtrado por idioma según el contenido disponible en el upstream |
+| **Autenticación** | No requerida |
+| **Límites de peticiones** | No especificados públicamente |
+| **Licencia de datos** | Contenido del upstream (Comix API es un proxy) |
+| **Licencia de imágenes** | Imágenes del upstream, servidas a través de proxy local para bypass de CORS |
+| **Términos de uso** | https://github.com/yurtzy/comix-api |
+| **Permisos de reproducción y distribución** | Comix API es un middleware no oficial sobre el upstream. No hospeda ni redistribuye contenido. Las imágenes se sirven a través de un proxy local para evitar problemas de CORS. Verificar términos del upstream original. |
+| **Estado de integración** | APPROVED |
+| **Limitaciones conocidas** | 1. Es un middleware no oficial y no afiliado con el upstream original. 2. Puede tener disponibilidad limitada dependiendo del upstream. 3. El contenido puede estar principalmente en inglés; verificar disponibilidad en español por capítulo. |
+| **Fecha de última comprobación** | 04/11/2026 |
+
+---
+
+## 3. Jikan (Unofficial MyAnimeList API)
 
 | Campo | Valor |
 |---|---|
@@ -54,7 +78,7 @@ Documentación de proveedores de datos y contenido para la aplicación de lectur
 
 ---
 
-## 3. AniList
+## 4. AniList
 
 | Campo | Valor |
 |---|---|
@@ -78,7 +102,7 @@ Documentación de proveedores de datos y contenido para la aplicación de lectur
 
 ---
 
-## 4. Kitsu
+## 5. Kitsu
 
 | Campo | Valor |
 |---|---|
@@ -106,7 +130,8 @@ Documentación de proveedores de datos y contenido para la aplicación de lectur
 
 | Proveedor | Metadata | Cover | Chapter | Page | Estado |
 |---|---|---|---|---|---|
-| MangaDex | Sí | Sí | Sí (con idioma) | Sí | UNDER_REVIEW |
+| MangaDex | Sí | Sí | Sí (con idioma) | Sí | DISABLED (bloqueado desde servidores) |
+| Comix API | Sí | Sí | Sí | Sí | APPROVED |
 | Jikan | Sí | Sí | No | No | REJECTED (lectura) |
 | AniList | Sí | Sí | No | No | REJECTED (lectura) |
 | Kitsu | Sí | Sí | Sí (sin idioma) | No | REJECTED (lectura) |
@@ -115,8 +140,24 @@ Documentación de proveedores de datos y contenido para la aplicación de lectur
 
 ## Decisión de integración
 
-**MangaDex es el único proveedor que cumple con todos los requisitos de lectura** (metadatos, portadas, capítulos con idioma, y páginas de imagen). Los demás proveedores solo proveen metadatos y no pueden usarse como proveedores de lectura de capítulos.
+**Comix API es el proveedor principal activo.** Tiene proxy de imágenes integrado, bypass de CORS, y soporte para múltiples idiomas. Es el único proveedor que cumple con todos los requisitos de lectura desde un servidor.
 
-Debido a que MangaDex no permite hotlinking directo de imágenes (CORS restringido), las imágenes del lector deberán servirse a través de un proxy del backend o la integración deberá reconsiderarse si esta restricción no puede salvarse de forma legítima.
+**MangaDex está marcado como DISABLED** porque bloquea solicitudes (403 Forbidden) desde direcciones IP de servidores/centros de datos. Funciona correctamente desde localhost durante el desarrollo. Se puede reactivar si se resuelve el bloqueo de IP.
 
-Si MangaDex no puede integrarse por la restricción de COS/licencia, no hay entre los proveedores investigados ninguno que permita leer capítulos con imágenes en español de forma legítima, y esa funcionalidad deberá documentarse como no disponible en lugar de simularse.
+Los demás proveedores (Jikan, AnIList, Kitsu) solo proveen metadatos y no pueden usarse como proveedores de lectura de capítulos con imágenes.
+
+---
+
+## Sobre MangaDex y error 403
+
+MangaDex bloquea solicitudes (HTTP 403 Forbidden) desde direcciones IP de servidores y centros de datos. Esto es una restricción del proveedor, no un error de código.
+
+- **Desde localhost (desarrollo):** MangaDex funciona correctamente (localhost está whitelisted para CORS).
+- **Desde servidores de producción:** MangaDex devuelve 403 Forbidden.
+
+Si se necesita usar MangaDex en producción, se debe:
+1. Usar una dirección IP que no esté bloqueada por MangaDex, o
+2. Usar un proxy intermedio autorizado, o
+3. Contactar a MangaDex para solicitar acceso.
+
+Mientras tanto, Comix API sirve como proveedor principal funcional.

@@ -270,8 +270,8 @@ function normalizeChapter(chapter: any, mangaId: string): Chapter {
 export const mangadexAdapter: MangaProvider = {
   id: 'mangadex',
   name: 'MangaDex',
-  active: true,
-  status: 'APPROVED',
+  active: false,
+  status: 'DISABLED',
   providerType: ['Metadata Provider', 'Cover Provider', 'Chapter Provider', 'Page Provider'],
   allowedLanguages: ['es', 'es-la', 'en', 'ja'],
   baseUrl: PROXY_BASE_URL,
