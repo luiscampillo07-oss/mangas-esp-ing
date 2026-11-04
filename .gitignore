@@ -1,0 +1,24 @@
+# Dependencias
+node_modules/
+
+# Build de Next.js
+.next/
+
+# Archivos de entorno locales
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Cobertura de pruebas
+coverage/
