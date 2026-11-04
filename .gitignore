@@ -22,3 +22,6 @@ yarn-error.log*
 
 # Cobertura de pruebas
 coverage/
+
+# Clon local del repositorio (no subir submódulos git anidados)
+mangas-esp-ing/
